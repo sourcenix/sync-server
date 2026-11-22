@@ -32,7 +32,7 @@ fn alphanumeric_words(s: &str) -> Vec<String> {
 
 /// Checks whether the texts look somewhat similar.
 /// Retrieves `None` if approximation is not possible. (if a or b is empty or contains non-alphanumeric symbols)
-pub fn approx_cmp_title(a: &str, b: &str) -> Option<bool> {
+pub fn approx_cmp_text(a: &str, b: &str) -> Option<bool> {
     let a_words = alphanumeric_words(a);
     let b_words = alphanumeric_words(b);
 
@@ -66,24 +66,27 @@ macro_rules! unwrap {
     };
 }
 
+/// Checks if specified entries look similar or equal. Uses `innertube` when `approx_cmp_text` is None.
+macro_rules! cmp {
+    ($self:ident, $innertube_fn:ident, $type:ident, $payload:expr, $rss:expr) => {{
+        if let Some(cmp) = approx_cmp_text(&$payload.$type, $rss.$type()) {
+            cmp
+        } else if let Some(it) = $self.innertube {
+            it.$innertube_fn(&$payload.id)
+                .await
+                .is_ok_and(|$type| $type == $payload.$type)
+        } else {
+            return ValidationResult::Skip;
+        }
+    }};
+}
+
 #[async_trait]
 impl Validator for RssValidator {
     async fn is_channel_information_valid(&self, channel: &Channel) -> ValidationResult<Channel> {
         let rss_channel = unwrap!(ytrss::RssChannel::fetch_from_channel_id(&channel.id).await);
 
-        let is_eq_or_similar =
-            if let Some(cmp) = approx_cmp_title(&channel.name, rss_channel.name()) {
-                cmp
-            } else if let Some(it) = self.innertube {
-                it.channel(&channel.id)
-                    .title()
-                    .await
-                    .is_ok_and(|title| title.as_ref() == Some(&channel.name))
-            } else {
-                return ValidationResult::Skip;
-            };
-
-        if !is_eq_or_similar {
+        if !cmp!(self, channel_title, name, channel, rss_channel) {
             return ValidationError::InvalidWithContext(
                 "invalid channel name provided".to_string(),
             )
@@ -117,19 +120,7 @@ impl Validator for RssValidator {
             return ValidationError::Invalid.into();
         };
 
-        let is_eq_or_similar =
-            if let Some(cmp) = approx_cmp_title(&video_data.title, rss_video.title()) {
-                cmp
-            } else if let Some(it) = self.innertube {
-                it.video(&video_data.id)
-                    .title()
-                    .await
-                    .is_ok_and(|title| title.as_ref() == Some(&video_data.title))
-            } else {
-                return ValidationResult::Skip;
-            };
-
-        if !is_eq_or_similar {
+        if !cmp!(self, video_title, title, video_data, rss_video) {
             return ValidationError::InvalidWithContext("invalid video title provided".to_string())
                 .into();
         }
@@ -156,19 +147,7 @@ impl Validator for RssValidator {
         let rss_playlist =
             unwrap!(ytrss::RssPlaylist::fetch_from_playlist_id(&playlist.playlist.id).await);
 
-        let is_eq_or_similar =
-            if let Some(cmp) = approx_cmp_title(&playlist.playlist.title, rss_playlist.title()) {
-                cmp
-            } else if let Some(it) = self.innertube {
-                it.playlist(&playlist.playlist.id)
-                    .title()
-                    .await
-                    .is_ok_and(|title| title.as_ref() == Some(&playlist.playlist.title))
-            } else {
-                return ValidationResult::Skip;
-            };
-
-        if !is_eq_or_similar {
+        if !cmp!(self, playlist_title, title, playlist.playlist, rss_playlist) {
             return ValidationError::InvalidWithContext(
                 "invalid playlist title provided".to_string(),
             )

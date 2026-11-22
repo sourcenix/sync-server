@@ -34,10 +34,9 @@ macro_rules! unwrap {
 #[async_trait]
 impl Validator for InnertubeValidator {
     async fn is_channel_information_valid(&self, channel: &Channel) -> ValidationResult<Channel> {
-        let it_channel = self.innertube.channel(&channel.id);
-        let it_metadata = unwrap!(it_channel.metadata().await);
+        let it_channel = unwrap!(self.innertube.channel_metadata(&channel.id).await);
 
-        if channel.name != it_metadata.title {
+        if channel.name != it_channel.title {
             return ValidationError::InvalidWithContext(
                 "invalid channel name provided".to_string(),
             )
@@ -45,9 +44,9 @@ impl Validator for InnertubeValidator {
         }
 
         ValidationResult::ValidAfterChanges(Channel {
-            id: it_channel.id().to_string(),
-            name: it_metadata.title.clone(),
-            avatar: Some(it_metadata.avatar.max_resolution().url.clone()),
+            id: channel.id.clone(),
+            name: it_channel.title,
+            avatar: Some(it_channel.avatar.thumbnails[0].url.clone()),
             verified: channel.verified,
         })
     }
@@ -57,15 +56,14 @@ impl Validator for InnertubeValidator {
         video_data: &CreateVideo,
     ) -> ValidationResult<CreateVideo> {
         let mut video_data_uploader = video_data.uploader.clone();
-        let it_video = self.innertube.video(&video_data.id);
-        let it_metadata = unwrap!(it_video.metadata().await);
+        let it_video = unwrap!(self.innertube.video_metadata(&video_data.id).await);
 
-        if video_data.title != it_metadata.title {
+        if video_data.title != it_video.title {
             return ValidationError::InvalidWithContext("invalid video title provided".to_string())
                 .into();
         }
 
-        if video_data.uploader.id == it_metadata.channel_id
+        if video_data.uploader.id == it_video.channel_id
             && self
                 .is_channel_information_valid(&video_data.uploader)
                 .await
@@ -73,12 +71,11 @@ impl Validator for InnertubeValidator {
                 .is_valid()
         {
             ValidationResult::ValidAfterChanges(CreateVideo {
-                id: it_video.id().to_string(),
-                title: it_metadata.title.clone(),
+                title: it_video.title,
                 uploader: video_data_uploader,
-                thumbnail_url: it_metadata.thumbnail.max_resolution().url,
-                duration: it_metadata.length_seconds as i32,
-                upload_date: video_data.upload_date,
+                thumbnail_url: it_video.thumbnail.thumbnails[0].url.clone(),
+                duration: it_video.length_seconds as i32,
+                ..video_data.to_owned()
             })
         } else {
             ValidationError::Invalid.into()
@@ -89,10 +86,13 @@ impl Validator for InnertubeValidator {
         &self,
         playlist: &ExtendedPublicPlaylist,
     ) -> ValidationResult<ExtendedPublicPlaylist> {
-        let it_playlist = self.innertube.playlist(&playlist.playlist.id);
-        let it_metadata = unwrap!(it_playlist.metadata().await);
+        let it_playlist = unwrap!(
+            self.innertube
+                .playlist_metadata(&playlist.playlist.id)
+                .await
+        );
 
-        if playlist.playlist.title != it_metadata.title {
+        if playlist.playlist.title != it_playlist.title {
             return ValidationError::InvalidWithContext(
                 "invalid playlist title provided".to_string(),
             )
@@ -104,7 +104,7 @@ impl Validator for InnertubeValidator {
         if playlist
             .playlist
             .video_count
-            .is_some_and(|video_count| video_count != it_metadata.video_count as u64)
+            .is_some_and(|video_count| video_count != it_playlist.video_count as u64)
         {
             return ValidationError::InvalidWithContext(
                 "video count is not equal to the actual amount of videos".to_string(),
@@ -125,11 +125,11 @@ impl Validator for InnertubeValidator {
 
         ValidationResult::ValidAfterChanges(ExtendedPublicPlaylist {
             playlist: ExtendedPlaylist {
-                id: it_playlist.id().to_string(),
-                title: it_metadata.title.clone(),
-                description: it_metadata.description.clone().unwrap_or_default(),
-                thumbnail_url: Some(it_metadata.thumbnail.max_resolution().url),
-                video_count: Some(it_metadata.video_count as u64),
+                id: playlist.playlist.id.clone(),
+                title: it_playlist.title,
+                description: it_playlist.description.unwrap_or_default(),
+                thumbnail_url: Some(it_playlist.thumbnail.max_resolution().url),
+                video_count: Some(it_playlist.video_count as u64),
             },
             uploader,
         })
