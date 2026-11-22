@@ -34,7 +34,7 @@ macro_rules! unwrap {
 #[async_trait]
 impl Validator for InnertubeValidator {
     async fn is_channel_information_valid(&self, channel: &Channel) -> ValidationResult<Channel> {
-        let it_channel = unwrap!(self.innertube.channel_metadata(&channel.id).await);
+        let it_channel = unwrap!(self.innertube.channel(&channel.id).metadata().await);
 
         if channel.name != it_channel.title {
             return ValidationError::InvalidWithContext(
@@ -56,7 +56,7 @@ impl Validator for InnertubeValidator {
         video_data: &CreateVideo,
     ) -> ValidationResult<CreateVideo> {
         let mut video_data_uploader = video_data.uploader.clone();
-        let it_video = unwrap!(self.innertube.video_metadata(&video_data.id).await);
+        let it_video = unwrap!(self.innertube.video(&video_data.id).metadata().await);
 
         if video_data.title != it_video.title {
             return ValidationError::InvalidWithContext("invalid video title provided".to_string())
@@ -73,7 +73,7 @@ impl Validator for InnertubeValidator {
             ValidationResult::ValidAfterChanges(CreateVideo {
                 title: it_video.title,
                 uploader: video_data_uploader,
-                thumbnail_url: it_video.thumbnail.thumbnails[0].url.clone(),
+                thumbnail_url: it_video.thumbnail.max_resolution().url,
                 duration: it_video.length_seconds as i32,
                 ..video_data.to_owned()
             })
@@ -88,7 +88,8 @@ impl Validator for InnertubeValidator {
     ) -> ValidationResult<ExtendedPublicPlaylist> {
         let it_playlist = unwrap!(
             self.innertube
-                .playlist_metadata(&playlist.playlist.id)
+                .playlist(&playlist.playlist.id)
+                .metadata()
                 .await
         );
 

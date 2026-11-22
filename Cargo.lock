@@ -1960,7 +1960,7 @@ dependencies = [
 [[package]]
 name = "innertube"
 version = "0.1.0"
-source = "git+https://github.com/libre-tube/innertube-rs?tag=2.0.0#4886c3445b793f8237aa44a656c625437455302c"
+source = "git+https://github.com/libre-tube/innertube-rs?tag=2.0.0#b3b9b7813f17ebd7f19fd8419e1962011326bad5"
 dependencies = [
  "base64 0.23.1",
  "isahc",
